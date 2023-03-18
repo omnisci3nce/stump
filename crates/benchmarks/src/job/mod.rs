@@ -71,8 +71,14 @@ impl JobDetail {
 pub trait JobExecutorTrait: Send + Sync {
 	fn name(&self) -> &'static str;
 	fn description(&self) -> Option<Box<&str>>;
+	fn detail(&self) -> &Option<JobDetail>;
 	fn detail_mut(&mut self) -> &mut Option<JobDetail>;
-	async fn run(&mut self, ctx: WorkerCtx) -> Result<(), JobError>;
+	async fn execute(&mut self, ctx: WorkerCtx) -> Result<(), JobError>;
+	async fn finish(
+		&self,
+		result: Result<(), JobError>,
+		ctx: WorkerCtx,
+	) -> Result<(), JobError>;
 }
 
 #[derive(Serialize, Deserialize)]
@@ -130,6 +136,10 @@ impl<InnerJob: JobTrait> Job<InnerJob> {
 
 #[async_trait::async_trait]
 impl<InnerJob: JobTrait> JobExecutorTrait for Job<InnerJob> {
+	fn detail(&self) -> &Option<JobDetail> {
+		&self.detail
+	}
+
 	fn detail_mut(&mut self) -> &mut Option<JobDetail> {
 		&mut self.detail
 	}
@@ -142,7 +152,7 @@ impl<InnerJob: JobTrait> JobExecutorTrait for Job<InnerJob> {
 		self.inner_job.description()
 	}
 
-	async fn run(&mut self, ctx: WorkerCtx) -> Result<(), JobError> {
+	async fn execute(&mut self, ctx: WorkerCtx) -> Result<(), JobError> {
 		let mut shutdown_rx = ctx.shutdown_rx();
 		let shutdown_rx_fut = shutdown_rx.recv();
 		tokio::pin!(shutdown_rx_fut);
@@ -158,7 +168,6 @@ impl<InnerJob: JobTrait> JobExecutorTrait for Job<InnerJob> {
 				job_result = self.inner_job.run(ctx.clone(), &mut self.state) => {
 					let duration = start.elapsed();
 					running = false;
-					// job_result
 					unimplemented!()
 				}
 				shutdown_result = &mut shutdown_rx_fut => {
@@ -178,6 +187,29 @@ impl<InnerJob: JobTrait> JobExecutorTrait for Job<InnerJob> {
 				}
 			}
 		}
+
+		unimplemented!()
+	}
+
+	async fn finish(
+		&self,
+		result: Result<(), JobError>,
+		ctx: WorkerCtx,
+	) -> Result<(), JobError> {
+		// if matches JobError::Paused, extract vector
+		// else use self.state and turn into vec<u8>
+
+		let resolved_state = if let Err(e) = result {
+			match e {
+				JobError::Paused(state) => state,
+				_ => serde_json::to_vec(&self.state)
+					.expect("Failed to serialize job state"),
+			}
+		} else {
+			serde_json::to_vec(&self.state).expect("Failed to serialize job state")
+		};
+
+		// TODO: persist state to DB
 
 		unimplemented!()
 	}

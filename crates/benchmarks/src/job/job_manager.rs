@@ -6,11 +6,19 @@ use tokio::sync::{broadcast, Mutex, RwLock};
 
 use super::{worker::Worker, JobExecutorTrait};
 
+// TODO: add pause variant for a single worker.
 #[derive(Debug, Clone)]
 pub enum JobManagerShutdownSignal {
 	All,
 	Worker(String),
 }
+
+#[derive(Debug)]
+pub enum JobManagerError {
+	WorkerNotFound(String),
+}
+
+pub type JobManagerResult<T> = Result<T, JobManagerError>;
 
 pub struct JobManager {
 	/// Queue of jobs waiting to be run in a worker thread.
@@ -38,6 +46,53 @@ impl JobManager {
 
 	pub fn get_shutdown_tx(&self) -> Arc<broadcast::Sender<JobManagerShutdownSignal>> {
 		Arc::clone(&self.shutdown_tx)
+	}
+
+	pub async fn cancel_job(self: Arc<Self>, job_id: String) -> JobManagerResult<()> {
+		let mut workers = self.workers.write().await;
+		if workers.get(&job_id).is_some() {
+			self.shutdown_tx
+				.send(JobManagerShutdownSignal::Worker(job_id.clone()))
+				.expect("Failed to send shutdown signal to worker!");
+			// TOOD: store the job state to DB as paused? This will likely just be handled in the worker...
+			workers.remove(&job_id);
+			drop(workers);
+			return Ok(());
+		}
+
+		let mut job_queue = self.job_queue.write().await;
+		let maybe_index = job_queue.iter().position(|job| {
+			let job_detail = job
+				.detail()
+				.as_ref()
+				.map(|job_detail| job_detail.id == job_id);
+			job_detail.unwrap_or(false)
+		});
+		if let Some(job_index) = maybe_index {
+			let job = job_queue
+				.get_mut(job_index)
+				.expect("Job not found in queue!");
+			// TODO: store the job state to DB as cancelled...
+			job_queue.remove(job_index);
+			return Ok(());
+		}
+
+		Err(JobManagerError::WorkerNotFound(job_id))
+	}
+
+	pub async fn pause_job(self: Arc<Self>, job_id: String) -> JobManagerResult<()> {
+		let workers = self.workers.read().await;
+		if workers.get(&job_id).is_some() {
+			self.shutdown_tx
+				.send(JobManagerShutdownSignal::Worker(job_id.clone()))
+				.expect("Failed to send shutdown signal to worker!");
+			// // TOOD: store the job state to DB as paused? This will likely just be handled in the worker...
+			// workers.remove(&job_id);
+			drop(workers);
+			Ok(())
+		} else {
+			Err(JobManagerError::WorkerNotFound(job_id))
+		}
 	}
 
 	pub async fn enqueue_job(self: Arc<Self>, mut job: Box<dyn JobExecutorTrait>) {
@@ -70,16 +125,39 @@ impl JobManager {
 		drop(workers);
 	}
 
-	pub async fn pause_job(self: Arc<Self>, job_id: String) {
-		// TODO: write vs read here? I guess it depends on how I wind up *actually* pause a job.
-		let workers = self.workers.read().await;
-		if workers.get(&job_id).is_some() {
-			self.shutdown_tx
-				.send(JobManagerShutdownSignal::Worker(job_id.clone()))
-				.expect("Failed to send shutdown signal to worker!");
-		} else {
-			println!("Job not found: {}", job_id);
+	/// Dequeues a job from the queue
+	pub async fn dequeue_job(self: Arc<Self>, job_id: String) -> JobManagerResult<()> {
+		let remove_result = self.workers.write().await.remove(&job_id);
+
+		if remove_result.is_none() {
+			if let Some(index) = self.get_queued_job_index(&job_id).await {
+				return self.dequeue_pending_job(index).await;
+			}
+
+			return Err(JobManagerError::WorkerNotFound(job_id));
 		}
-		drop(workers);
+
+		let next_job = self.job_queue.write().await.pop_front();
+		if let Some(job) = next_job {
+			// TODO: dispatch to event handler
+		}
+
+		Ok(())
+	}
+
+	async fn dequeue_pending_job(self: Arc<Self>, index: usize) -> JobManagerResult<()> {
+		self.job_queue.write().await.remove(index);
+		Ok(())
+	}
+
+	async fn get_queued_job_index(&self, job_id: &str) -> Option<usize> {
+		let job_queue = self.job_queue.read().await;
+		job_queue.iter().position(|job| {
+			let job_detail = job
+				.detail()
+				.as_ref()
+				.map(|job_detail| job_detail.id == job_id);
+			job_detail.unwrap_or(false)
+		})
 	}
 }

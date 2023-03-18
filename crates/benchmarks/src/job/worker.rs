@@ -57,16 +57,17 @@ impl Worker {
 			.take()
 			.expect("Failed to take job from worker");
 
-		let handle = tokio::spawn(async move {
-			if let Err(e) = job.run(worker_ctx).await {
-				println!("Job failed: {:?}", e);
-			} else {
-				println!("Job finished!");
-			}
-
-			// job_manager.dequeue_job(runner_id).await;
+		tokio::spawn(async move {
+			let result = job.execute(worker_ctx.clone()).await;
+			job.finish(result, worker_ctx)
+				.await
+				.expect("Failed to finish job!");
+			job_manager
+				.dequeue_job(job_id)
+				.await
+				.expect("Failed to dequeue job!")
 		});
 
-		unimplemented!()
+		Ok(())
 	}
 }
