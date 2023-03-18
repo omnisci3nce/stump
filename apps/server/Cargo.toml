@@ -20,7 +20,7 @@ tower-http = { version = "0.3.5", features = [
   "set-header"
 ] }
 hyper = "0.14.20"
-serde_json = "1.0.85"
+serde_json = { workspace = true }
 serde_with = "2.1.0"
 # used for the ws stuff
 futures-util = "0.3.24"
@@ -29,7 +29,7 @@ tokio = { workspace = true }
 tokio-util = "0.7.4"
 serde = { workspace = true }
 axum-sessions = "0.4.1"
-async-trait = "0.1.53"
+async-trait = { workspace = true }
 async-stream = { workspace = true }
 # TODO: figure out this super fucking annoying cargo dependency resolution issue. This is the second time
 # cargo, in docker, has ignored the workspace version of this dep and instead used the latest version from crates.io

@@ -269,6 +269,11 @@ model Job {
   task_count           Int      @default(1)
   // The total number of tasks completed (i.e. without error/failure)
   completed_task_count Int      @default(0)
+  // The state of the job. This is primarily stored in order to support pausing/resuming
+  // jobs, as it will hold the state of the job at the time it was paused.
+  state                Bytes?
+  // A JSON blob of optional, extra metadata
+  extra_metadata       Bytes?
   // The time (in milliseconds) to complete the job
   // TODO: I might have to change this. Initial lookup shows the max integer value for 
   // sqlite is LARGE (9223372036854775807) which is 106751991167.3 days lol BUT should
