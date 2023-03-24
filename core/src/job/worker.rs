@@ -2,15 +2,18 @@ use std::sync::Arc;
 
 use tokio::sync::{broadcast, Mutex};
 
+use crate::{event::CoreEvent, prelude::Ctx};
+
 use super::{
 	job_manager::{JobManager, JobManagerShutdownSignal},
-	JobDetail, JobError, JobExecutorTrait,
+	JobDetail, JobError, JobExecutorTrait, JobUpdate,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct WorkerCtx {
-	job_id: String,
-	shutdown_tx: Arc<broadcast::Sender<JobManagerShutdownSignal>>,
+	pub job_id: String,
+	pub shutdown_tx: Arc<broadcast::Sender<JobManagerShutdownSignal>>,
+	pub core_ctx: Arc<Ctx>,
 }
 
 impl WorkerCtx {
@@ -20,6 +23,10 @@ impl WorkerCtx {
 
 	pub fn job_id(&self) -> &str {
 		&self.job_id
+	}
+
+	pub fn emit_progress(&self, progress: JobUpdate) {
+		self.core_ctx.emit_event(CoreEvent::JobProgress(progress))
 	}
 }
 
@@ -41,31 +48,30 @@ impl Worker {
 	}
 
 	pub async fn spawn(
-		job_id: String,
+		worker_ctx: WorkerCtx,
 		job_manager: Arc<JobManager>,
 		worker_mtx: Arc<Mutex<Self>>,
 	) -> Result<(), JobError> {
-		let worker_ctx = WorkerCtx {
-			job_id: job_id.clone(),
-			shutdown_tx: job_manager.get_shutdown_tx(),
-		};
-
+		let job_id = worker_ctx.job_id.clone();
 		let mut job = worker_mtx
 			.lock()
 			.await
 			.job
 			.take()
-			.expect("Failed to take job from worker");
+			.ok_or(JobError::SpawnFailed)?;
 
 		tokio::spawn(async move {
 			let result = job.execute(worker_ctx.clone()).await;
+
+			// TODO: emit errors without expect...
 			job.finish(result, worker_ctx)
 				.await
 				.expect("Failed to finish job!");
+
 			job_manager
 				.dequeue_job(job_id)
 				.await
-				.expect("Failed to dequeue job!")
+				.expect("Failed to dequeue job!");
 		});
 
 		Ok(())

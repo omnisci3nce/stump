@@ -81,7 +81,7 @@ async fn scan_series(
 		match utils::insert_media(&ctx, path, series.id.clone(), &library_options).await {
 			Ok(media) => {
 				visited_media.insert(media.path.clone(), true);
-				ctx.emit_client_event(CoreEvent::CreatedMedia(Box::new(media)));
+				ctx.emit_event(CoreEvent::CreatedMedia(Box::new(media)));
 			},
 			Err(e) => {
 				error!(error = ?e, "Failed to create media");

@@ -6,22 +6,22 @@ use tokio::sync::oneshot;
 
 use crate::{
 	db::models::Media,
-	job::{Job, JobReport, JobStatus, JobUpdate},
+	job::{JobDetail, JobExecutorTrait, JobManagerResult, JobStatus, JobUpdate},
 	prelude::CoreResult,
 	prisma,
 };
 
 pub enum InternalCoreTask {
-	QueueJob(Box<dyn Job>),
-	GetJobReports(oneshot::Sender<CoreResult<Vec<JobReport>>>),
+	EnqueueJob(Box<dyn JobExecutorTrait>),
+	GetJobs(oneshot::Sender<CoreResult<Vec<JobDetail>>>),
 	CancelJob {
 		job_id: String,
-		return_sender: oneshot::Sender<CoreResult<()>>,
+		return_sender: oneshot::Sender<JobManagerResult<()>>,
 	},
 }
 
 pub enum ClientResponse {
-	GetJobReports(Vec<JobReport>),
+	GetJobDetails(Vec<JobDetail>),
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, Type)]

@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use serde::{Deserialize, Serialize};
 
-use crate::job::{JobError, JobState, JobTrait, WorkerCtx};
+use crate::job::{Job, JobError, JobState, JobTrait, WorkerCtx};
 
 pub const LIBRARY_SCAN_JOB_NAME: &str = "library_scan";
 
@@ -35,5 +35,11 @@ impl JobTrait for LibraryScanJob {
 		state: &mut JobState<Self>,
 	) -> Result<(), JobError> {
 		unimplemented!()
+	}
+}
+
+impl LibraryScanJob {
+	pub fn new(library_path: String) -> Box<Job<LibraryScanJob>> {
+		Job::new(Self { library_path })
 	}
 }

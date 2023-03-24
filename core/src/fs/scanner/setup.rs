@@ -182,16 +182,14 @@ async fn setup_library_series(
 			error!("Failed to batch insert series: {}", e);
 
 		// TODO: uncomment once ctx has runner_id
-		// ctx.emit_client_event(CoreEvent::CreateEntityFailed {
+		// ctx.emit_event(CoreEvent::CreateEntityFailed {
 		// 	runner_id: Some(runner_id.to_string()),
 		// 	message: format!("Failed to batch insert series: {}", e),
 		// 	path: library_path.clone(),
 		// });
 		} else {
 			let mut inserted_series = result.unwrap();
-			ctx.emit_client_event(CoreEvent::CreatedSeriesBatch(
-				inserted_series.len() as u64
-			));
+			ctx.emit_event(CoreEvent::CreatedSeriesBatch(inserted_series.len() as u64));
 			series.append(&mut inserted_series);
 		}
 	}

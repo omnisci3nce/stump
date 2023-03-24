@@ -4,6 +4,8 @@ use prisma_client_rust::RelationNotFetchedError;
 use thiserror::Error;
 use zip::result::ZipError;
 
+use crate::job::JobManagerError;
+
 #[derive(Error, Debug)]
 pub enum CoreError {
 	#[error("Failed to initialize Stump core: {0}")]
@@ -37,6 +39,8 @@ pub enum CoreError {
 	#[error("An unknown error ocurred: {0}")]
 	Unknown(String),
 }
+
+// TODO: move to scanner/fs crate?
 
 #[derive(Error, Debug)]
 pub enum ProcessFileError {
@@ -81,6 +85,12 @@ impl From<ProcessFileError> for CoreError {
 			ProcessFileError::Unknown(err) => CoreError::Unknown(err),
 			_ => CoreError::InternalError(error.to_string()),
 		}
+	}
+}
+
+impl From<JobManagerError> for CoreError {
+	fn from(error: JobManagerError) -> Self {
+		CoreError::InternalError(error.to_string())
 	}
 }
 

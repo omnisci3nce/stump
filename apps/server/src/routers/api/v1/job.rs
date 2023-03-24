@@ -4,7 +4,7 @@ use axum::{
 	routing::{delete, get},
 	Json, Router,
 };
-use stump_core::{event::InternalCoreTask, job::JobReport};
+use stump_core::{event::InternalCoreTask, job::JobDetail};
 use tokio::sync::oneshot;
 use tracing::debug;
 
@@ -38,10 +38,10 @@ pub(crate) fn mount(app_state: AppState) -> Router<AppState> {
 	)
 )]
 /// Get all running/pending jobs.
-async fn get_job_reports(State(ctx): State<AppState>) -> ApiResult<Json<Vec<JobReport>>> {
+async fn get_job_reports(State(ctx): State<AppState>) -> ApiResult<Json<Vec<JobDetail>>> {
 	let (task_tx, task_rx) = oneshot::channel();
 
-	ctx.internal_task(InternalCoreTask::GetJobReports(task_tx))
+	ctx.dispatch_task(InternalCoreTask::GetJobs(task_tx))
 		.map_err(|e| {
 			ApiError::InternalServerError(format!(
 				"Failed to submit internal task: {}",
@@ -95,7 +95,7 @@ async fn cancel_job(
 ) -> ApiResult<()> {
 	let (task_tx, task_rx) = oneshot::channel();
 
-	ctx.internal_task(InternalCoreTask::CancelJob {
+	ctx.dispatch_task(InternalCoreTask::CancelJob {
 		job_id,
 		return_sender: task_tx,
 	})
@@ -103,7 +103,9 @@ async fn cancel_job(
 		ApiError::InternalServerError(format!("Failed to submit internal task: {}", e))
 	})?;
 
-	Ok(task_rx.await.map_err(|e| {
-		ApiError::InternalServerError(format!("Failed to cancel job: {}", e))
-	})??)
+	// FIXME:
+	unimplemented!()
+	// Ok(task_rx.await.map_err(|e| {
+	// 	ApiError::InternalServerError(format!("Failed to cancel job: {}", e))
+	// })??)
 }

@@ -19,7 +19,7 @@ use crate::{
 			BatchScanOperation, ScannedFileTrait,
 		},
 	},
-	job::{persist_job_start, runner::RunnerCtx, JobUpdate},
+	job::{JobUpdate, WorkerCtx},
 	prelude::{CoreError, CoreResult, Ctx},
 	prisma::series,
 };
@@ -31,7 +31,7 @@ use super::setup::{setup_library, LibrarySetup};
 // trying to keep up with the shear amount of updates it gets. I might have to throttle the
 // updates to the UI when libraries reach a certain size and send updates in batches instead.
 async fn scan_series(
-	ctx: Ctx,
+	ctx: Arc<Ctx>,
 	series: series::Data,
 	library_path: &str,
 	library_options: LibraryOptions,
@@ -106,13 +106,13 @@ async fn scan_series(
 	operations
 }
 
-pub async fn scan(ctx: RunnerCtx, path: String, runner_id: String) -> CoreResult<u64> {
+pub async fn scan(ctx: WorkerCtx, path: String, runner_id: String) -> CoreResult<u64> {
 	let core_ctx = ctx.core_ctx.clone();
 
-	ctx.progress(JobUpdate::job_initializing(
-		runner_id.clone(),
-		Some("Preparing library scan...".to_string()),
-	));
+	// ctx.progress(JobUpdate::job_initializing(
+	// 	runner_id.clone(),
+	// 	Some("Preparing library scan...".to_string()),
+	// ));
 
 	let LibrarySetup {
 		library,
@@ -123,7 +123,7 @@ pub async fn scan(ctx: RunnerCtx, path: String, runner_id: String) -> CoreResult
 
 	// Sleep for a little to let the UI breathe.
 	tokio::time::sleep(Duration::from_millis(1000)).await;
-	persist_job_start(&core_ctx, runner_id.clone(), tasks).await?;
+	// persist_job_start(&core_ctx, runner_id.clone(), tasks).await?;
 
 	let counter = Arc::new(AtomicU64::new(0));
 	let future_iter = library_series.into_iter().map(|s| async {
@@ -138,12 +138,12 @@ pub async fn scan(ctx: RunnerCtx, path: String, runner_id: String) -> CoreResult
 		scan_series(scanner_ctx, s, &library_path, library_options, move |msg| {
 			let previous = counter_ref.fetch_add(1, Ordering::SeqCst);
 
-			progress_ctx.progress(JobUpdate::job_progress(
-				r_id.to_owned(),
-				Some(previous + 1),
-				tasks,
-				Some(msg),
-			));
+			// progress_ctx.progress(JobUpdate::job_progress(
+			// 	r_id.to_owned(),
+			// 	Some(previous + 1),
+			// 	tasks,
+			// 	Some(msg),
+			// ));
 		})
 		.await
 	});
@@ -166,23 +166,22 @@ pub async fn scan(ctx: RunnerCtx, path: String, runner_id: String) -> CoreResult
 		})?;
 
 	if !created_media.is_empty() {
-		core_ctx
-			.emit_client_event(CoreEvent::CreatedMediaBatch(created_media.len() as u64));
+		core_ctx.emit_event(CoreEvent::CreatedMediaBatch(created_media.len() as u64));
 	}
 
 	// TODO: change task_count and send progress?
 	if library_options.create_webp_thumbnails {
 		trace!("Library configured to create WEBP thumbnails.");
 
-		ctx.progress(JobUpdate::job_progress(
-			runner_id.clone(),
-			Some(final_count),
-			tasks,
-			Some(format!(
-				"Creating {} WEBP thumbnails (this can take some time)",
-				created_media.len()
-			)),
-		));
+		// ctx.progress(JobUpdate::job_progress(
+		// 	runner_id.clone(),
+		// 	Some(final_count),
+		// 	tasks,
+		// 	Some(format!(
+		// 		"Creating {} WEBP thumbnails (this can take some time)",
+		// 		created_media.len()
+		// 	)),
+		// ));
 
 		// sleep for a bit to let client catch up
 		tokio::time::sleep(Duration::from_millis(50)).await;
@@ -192,12 +191,12 @@ pub async fn scan(ctx: RunnerCtx, path: String, runner_id: String) -> CoreResult
 		}
 	}
 
-	ctx.progress(JobUpdate::job_finishing(
-		runner_id,
-		Some(final_count),
-		tasks,
-		None,
-	));
+	// ctx.progress(JobUpdate::job_finishing(
+	// 	runner_id,
+	// 	Some(final_count),
+	// 	tasks,
+	// 	None,
+	// ));
 	tokio::time::sleep(Duration::from_millis(1000)).await;
 
 	Ok(final_count)

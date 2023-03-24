@@ -2,7 +2,7 @@ use stump_core::db::models::{
 	LibrariesStats, Library, LibraryOptions, LibraryPattern, LibraryScanMode, LogLevel,
 	Media, ReadProgress, ReadingList, Series, Tag, User, UserPreferences,
 };
-use stump_core::job::{JobReport, JobStatus};
+use stump_core::job::{JobDetail, JobStatus};
 use stump_core::prelude::{
 	ClaimResponse, CreateLibraryArgs, CreateReadingList, CreateTags, CursorInfo,
 	Direction, DirectoryListing, DirectoryListingFile, DirectoryListingInput, FileStatus,
@@ -88,7 +88,7 @@ use super::api;
             PageableMedia, PageableSeries, LoginOrRegisterArgs, DirectoryListingInput,
             PageQuery, FilterableLibraryQuery, PaginationQuery, QueryOrder, LibraryFilter,
             Direction, CreateLibraryArgs, UpdateLibraryArgs, ApiError, MediaFilter, SeriesFilter,
-            FilterableMediaQuery, FilterableSeriesQuery, JobReport, LibrariesStats, ScanQueryParam,
+            FilterableMediaQuery, FilterableSeriesQuery, JobDetail, LibrariesStats, ScanQueryParam,
             JobStatus, SeriesRelation, CreateReadingList, UserPreferencesUpdate, UpdateUserArgs,
             CreateTags
         )

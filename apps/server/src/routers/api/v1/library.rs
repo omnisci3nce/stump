@@ -15,8 +15,7 @@ use stump_core::{
 		models::{LibrariesStats, Library, LibraryScanMode, Series},
 		utils::PrismaCountTrait,
 	},
-	fs::{image, media_file},
-	job::LibraryScanJob,
+	fs::{image, media_file, scanner::LibraryScanJob},
 	prelude::{
 		CreateLibraryArgs, Pageable, Pagination, PaginationQuery, ScanQueryParam,
 		UpdateLibraryArgs,
@@ -373,33 +372,23 @@ async fn scan_library(
 	let db = ctx.get_db();
 	let _user = get_session_admin_user(&session)?;
 
-	let lib = db
+	let library = db
 		.library()
 		.find_unique(library::id::equals(id.clone()))
 		.exec()
-		.await?;
-
-	if lib.is_none() {
-		return Err(ApiError::NotFound(format!(
+		.await?
+		.ok_or(ApiError::NotFound(format!(
 			"Library with id {} not found",
 			id
-		)));
-	}
-
-	let lib = lib.unwrap();
+		)))?;
 
 	let scan_mode = query.scan_mode.to_owned().unwrap_or_default();
 	let scan_mode = LibraryScanMode::from_str(&scan_mode)
 		.map_err(|e| ApiError::BadRequest(format!("Invalid scan mode: {}", e)))?;
 
-	// TODO: should this just be an error?
+	// TODO: take in scan mode
 	if scan_mode != LibraryScanMode::None {
-		let job = LibraryScanJob {
-			path: lib.path,
-			scan_mode,
-		};
-
-		return Ok(ctx.spawn_job(Box::new(job))?);
+		ctx.dispatch_job(LibraryScanJob::new(library.path))?;
 	}
 
 	Ok(())
@@ -505,10 +494,11 @@ async fn create_library(
 	let scan_mode = input.scan_mode.unwrap_or_default();
 	// `scan` is not a required field, however it will default to BATCHED if not provided
 	if scan_mode != LibraryScanMode::None {
-		ctx.spawn_job(Box::new(LibraryScanJob {
-			path: library.path.clone(),
-			scan_mode,
-		}))?;
+		// FIXME: AH
+		// ctx.spawn_job(Box::new(LibraryScanJob {
+		// 	path: library.path.clone(),
+		// 	scan_mode,
+		// }))?;
 	}
 
 	Ok(Json(library))
@@ -619,10 +609,11 @@ async fn update_library(
 
 	// `scan` is not a required field, however it will default to BATCHED if not provided
 	if scan_mode != LibraryScanMode::None {
-		ctx.spawn_job(Box::new(LibraryScanJob {
-			path: updated.path.clone(),
-			scan_mode,
-		}))?;
+		// FIXME: AH
+		// ctx.spawn_job(Box::new(LibraryScanJob {
+		// 	path: updated.path.clone(),
+		// 	scan_mode,
+		// }))?;
 	}
 
 	Ok(Json(updated.into()))

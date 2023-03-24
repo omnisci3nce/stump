@@ -2,26 +2,29 @@ use std::path::{Path, PathBuf};
 
 mod batch_scanner;
 mod setup;
-mod sync_scanner;
+// mod sync_scanner;
+mod library_scan_job;
 mod utils;
 
 use walkdir::WalkDir;
 
+pub use library_scan_job::LibraryScanJob;
+
 use crate::{
 	db::models::{LibraryScanMode, Media},
-	job::runner::RunnerCtx,
+	job::WorkerCtx,
 	prelude::{ContentType, CoreResult},
 };
 
 pub async fn scan(
-	ctx: RunnerCtx,
+	ctx: WorkerCtx,
 	path: String,
 	runner_id: String,
 	scan_mode: LibraryScanMode,
 ) -> CoreResult<u64> {
 	match scan_mode {
 		LibraryScanMode::Batched => batch_scanner::scan(ctx, path, runner_id).await,
-		LibraryScanMode::Sync => sync_scanner::scan(ctx, path, runner_id).await,
+		// LibraryScanMode::Sync => sync_scanner::scan(ctx, path, runner_id).await,
 		_ => unreachable!("A job should not have reached this point if the scan mode is not batch or sync."),
 	}
 }

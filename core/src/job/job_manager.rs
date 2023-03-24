@@ -4,6 +4,8 @@ use std::{
 };
 use tokio::sync::{broadcast, Mutex, RwLock};
 
+use crate::{job::WorkerCtx, prelude::Ctx};
+
 use super::{worker::Worker, JobExecutorTrait};
 
 // TODO: add pause variant for a single worker.
@@ -13,9 +15,18 @@ pub enum JobManagerShutdownSignal {
 	Worker(String),
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum JobManagerError {
+	#[error("An communication error occurred {0}")]
+	IPCError(#[from] broadcast::error::SendError<JobManagerShutdownSignal>),
+	#[error("Worker not found {0}")]
 	WorkerNotFound(String),
+	#[error("Worker is in invalid state {0}")]
+	WorkerInvalidState(String),
+	#[error("Worker spawn failed")]
+	WorkerSpawnFailed,
+	#[error("Job not found {0}")]
+	JobNotFound(String),
 }
 
 pub type JobManagerResult<T> = Result<T, JobManagerError>;
@@ -27,16 +38,19 @@ pub struct JobManager {
 	workers: RwLock<HashMap<String, Arc<Mutex<Worker>>>>,
 	/// A channel to send shutdown signals to all or some workers.
 	shutdown_tx: Arc<broadcast::Sender<JobManagerShutdownSignal>>,
+	/// A pointer to the core context.
+	core_ctx: Arc<Ctx>,
 }
 
 impl JobManager {
-	pub fn new() -> Self {
+	pub fn new(core_ctx: Arc<Ctx>) -> Self {
 		let (shutdown_tx, _) = broadcast::channel(1024);
 
 		Self {
 			job_queue: RwLock::new(VecDeque::new()),
 			workers: RwLock::new(HashMap::new()),
 			shutdown_tx: Arc::new(shutdown_tx),
+			core_ctx,
 		}
 	}
 
@@ -52,9 +66,8 @@ impl JobManager {
 		let mut workers = self.workers.write().await;
 		if workers.get(&job_id).is_some() {
 			self.shutdown_tx
-				.send(JobManagerShutdownSignal::Worker(job_id.clone()))
-				.expect("Failed to send shutdown signal to worker!");
-			// TOOD: store the job state to DB as paused? This will likely just be handled in the worker...
+				.send(JobManagerShutdownSignal::Worker(job_id.clone()))?;
+
 			workers.remove(&job_id);
 			drop(workers);
 			return Ok(());
@@ -66,13 +79,11 @@ impl JobManager {
 				.detail()
 				.as_ref()
 				.map(|job_detail| job_detail.id == job_id);
+
 			job_detail.unwrap_or(false)
 		});
+
 		if let Some(job_index) = maybe_index {
-			let job = job_queue
-				.get_mut(job_index)
-				.expect("Job not found in queue!");
-			// TODO: store the job state to DB as cancelled...
 			job_queue.remove(job_index);
 			return Ok(());
 		}
@@ -81,13 +92,12 @@ impl JobManager {
 	}
 
 	pub async fn pause_job(self: Arc<Self>, job_id: String) -> JobManagerResult<()> {
-		let workers = self.workers.read().await;
+		let mut workers = self.workers.write().await;
+
 		if workers.get(&job_id).is_some() {
 			self.shutdown_tx
-				.send(JobManagerShutdownSignal::Worker(job_id.clone()))
-				.expect("Failed to send shutdown signal to worker!");
-			// // TOOD: store the job state to DB as paused? This will likely just be handled in the worker...
-			// workers.remove(&job_id);
+				.send(JobManagerShutdownSignal::Worker(job_id.clone()))?;
+			workers.remove(&job_id);
 			drop(workers);
 			Ok(())
 		} else {
@@ -95,7 +105,10 @@ impl JobManager {
 		}
 	}
 
-	pub async fn enqueue_job(self: Arc<Self>, mut job: Box<dyn JobExecutorTrait>) {
+	pub async fn enqueue_job(
+		self: Arc<Self>,
+		mut job: Box<dyn JobExecutorTrait>,
+	) -> JobManagerResult<()> {
 		let mut workers = self.workers.write().await;
 
 		if workers.is_empty() {
@@ -109,23 +122,29 @@ impl JobManager {
 			let job_id = job_detail.id.clone();
 			let worker = Worker::new(job, job_detail);
 			let worker_mtx = Arc::new(Mutex::new(worker));
+			let worker_ctx = WorkerCtx {
+				job_id: job_id.clone(),
+				shutdown_tx: self.get_shutdown_tx(),
+				core_ctx: Arc::clone(&self.core_ctx),
+			};
 
-			let spawn_result =
-				Worker::spawn(job_id.clone(), Arc::clone(&self), Arc::clone(&worker_mtx))
-					.await;
-			if let Err(err) = spawn_result {
-				println!("Error spawning worker: {:?}", err);
-			} else {
-				workers.insert(job_id, worker_mtx);
-			}
+			Worker::spawn(worker_ctx, Arc::clone(&self), Arc::clone(&worker_mtx))
+				.await
+				.map_err(|e| {
+					println!("Error spawning worker: {:?}", e);
+					JobManagerError::WorkerSpawnFailed
+				})?;
+			workers.insert(job_id, worker_mtx);
 		} else {
 			self.job_queue.write().await.push_back(job);
 		}
 
 		drop(workers);
+		Ok(())
 	}
 
-	/// Dequeues a job from the queue
+	/// Attempts to remove a worker by job ID. If the worker is not found, it is
+	/// assumed to be in the pending queue and is removed from there.
 	pub async fn dequeue_job(self: Arc<Self>, job_id: String) -> JobManagerResult<()> {
 		let remove_result = self.workers.write().await.remove(&job_id);
 
@@ -139,7 +158,8 @@ impl JobManager {
 
 		let next_job = self.job_queue.write().await.pop_front();
 		if let Some(job) = next_job {
-			// TODO: dispatch to event handler
+			// TODO: error handling
+			let _ = self.core_ctx.dispatch_job(job);
 		}
 
 		Ok(())
@@ -148,6 +168,11 @@ impl JobManager {
 	async fn dequeue_pending_job(self: Arc<Self>, index: usize) -> JobManagerResult<()> {
 		self.job_queue.write().await.remove(index);
 		Ok(())
+	}
+
+	/// Clears the job queue. Will not cancel any jobs that are currently running.
+	pub async fn clear_queue(self: Arc<Self>) {
+		self.job_queue.write().await.clear();
 	}
 
 	async fn get_queued_job_index(&self, job_id: &str) -> Option<usize> {
@@ -160,4 +185,30 @@ impl JobManager {
 			job_detail.unwrap_or(false)
 		})
 	}
+
+	// pub async fn report(self: Arc<Self>) -> CoreResult<Vec<JobReport>> {
+	// 	let db = self.core_ctx.get_db();
+
+	// 	let mut jobs = db
+	// 		.job()
+	// 		.find_many(vec![])
+	// 		.order_by(job::completed_at::order(Direction::Desc))
+	// 		.exec()
+	// 		.await?
+	// 		.into_iter()
+	// 		.map(JobReport::from)
+	// 		.collect::<Vec<JobReport>>();
+
+	// 	jobs.append(
+	// 		&mut self
+	// 			.job_queue
+	// 			.write()
+	// 			.await
+	// 			.iter()
+	// 			.map(JobReport::from)
+	// 			.collect::<Vec<JobReport>>(),
+	// 	);
+
+	// 	Ok(jobs)
+	// }
 }

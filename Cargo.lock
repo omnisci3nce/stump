@@ -370,9 +370,7 @@ dependencies = [
 name = "benchmarks"
 version = "0.1.0"
 dependencies = [
- "async-trait",
- "serde",
- "serde_json",
+ "stump_core",
  "tokio",
 ]
 
@@ -5188,6 +5186,7 @@ dependencies = [
  "ring",
  "serde",
  "serde-xml-rs",
+ "serde_json",
  "specta",
  "thiserror",
  "tokio",
