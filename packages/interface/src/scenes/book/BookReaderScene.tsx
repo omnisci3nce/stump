@@ -5,6 +5,7 @@ import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-
 import ImageBasedReader, {
 	AnimatedImageBasedReader,
 } from '../../components/readers/ImageBasedReader'
+import ImageBasedScrollReader from '../../components/readers/ImageBasedScrollReader'
 import paths from '../../paths'
 import { ARCHIVE_EXTENSION, EBOOK_EXTENSION } from '../../utils/patterns'
 
@@ -48,7 +49,7 @@ export default function BookReaderScene() {
 
 		// TODO: this will be merged under ImageBasedReader once animations get stable. animation will become a prop
 		// eventually. This is just a debug tool for me right now, and will not remain as separate components in the future.
-		const Component = animated ? AnimatedImageBasedReader : ImageBasedReader
+		const Component = ImageBasedScrollReader
 
 		return (
 			<Component
