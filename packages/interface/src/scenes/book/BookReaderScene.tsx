@@ -27,6 +27,8 @@ export default function BookReaderScene() {
 
 	function handleChangePage(newPage: number) {
 		updateReadProgress(newPage)
+		// search.set('page', newPage.toString())
+		// setSearch(search)
 		navigate(paths.bookReader(id!, { page: newPage }))
 	}
 
@@ -38,27 +40,45 @@ export default function BookReaderScene() {
 
 	if (media.extension.match(EBOOK_EXTENSION)) {
 		return <Navigate to={paths.bookReader(id, { isEpub: true })} />
-	} else if (!page || parseInt(page, 10) <= 0) {
+	}
+
+	// TODO: I cannot do this anymore... I think page should just become a search param,
+	// and then if scroll is not set then these can be applied... Therefore, I think the route
+	// in the app router could be: reader?page=1 OR reader?scroll=vertical&page=3
+	else if (!page || parseInt(page, 10) <= 0) {
 		return <Navigate to={paths.bookReader(id, { page: 1 })} />
 	} else if (parseInt(page, 10) > media.pages) {
 		return <Navigate to={paths.bookReader(id, { page: media.pages })} />
 	}
 
 	if (media.extension.match(ARCHIVE_EXTENSION)) {
-		// const animated = !!search.get('animated')
+		const scroll = search.get('scroll')
+		const initialPage = page ? parseInt(page, 10) : media.current_page || undefined
 
+		if (scroll) {
+			return (
+				<ImageBasedScrollReader
+					media={media}
+					initialPage={initialPage}
+					//! FIXME: don't be lazy aaron...
+					orientation={scroll as 'horizontal' | 'vertical'}
+					getPageUrl={(pageNumber) => getMediaPage(id, pageNumber)}
+					onProgressUpdate={updateReadProgress}
+				/>
+			)
+		}
+
+		const animated = search.get('animated')
 		// TODO: this will be merged under ImageBasedReader once animations get stable. animation will become a prop
 		// eventually. This is just a debug tool for me right now, and will not remain as separate components in the future.
-
-		// TODO: don't do this. I think we are approaching an ugly workaround here with all this conditional logic...
-		const Component = ImageBasedScrollReader
+		const Component = animated ? AnimatedImageBasedReader : ImageBasedReader
 
 		return (
 			<Component
 				media={media}
-				// currentPage={parseInt(page, 10)}
+				currentPage={parseInt(page, 10)}
 				getPageUrl={(pageNumber) => getMediaPage(id, pageNumber)}
-				// onPageChange={handleChangePage}
+				onPageChange={handleChangePage}
 			/>
 		)
 	}

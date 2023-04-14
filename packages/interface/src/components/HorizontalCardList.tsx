@@ -84,9 +84,9 @@ export default function HorizontalCardList({ cards, title, fetchNext }: Props) {
 
 		if (!virtualItem) {
 			// NOTE: this is really just a guess, and this should never ~really~ happen
-			columnVirtualizer.scrollToOffset(getItemOffset(nextIndex), { smoothScroll: true })
+			columnVirtualizer.scrollToOffset(getItemOffset(nextIndex))
 		} else {
-			columnVirtualizer.scrollToIndex(nextIndex, { smoothScroll: true })
+			columnVirtualizer.scrollToIndex(nextIndex)
 		}
 	}
 
@@ -96,7 +96,7 @@ export default function HorizontalCardList({ cards, title, fetchNext }: Props) {
 			nextIndex = 0
 		}
 
-		columnVirtualizer.scrollToIndex(nextIndex, { smoothScroll: true })
+		columnVirtualizer.scrollToIndex(nextIndex)
 	}
 
 	return (

@@ -1,20 +1,26 @@
 import type { Media } from '@stump/types'
-import { useVirtualizer, useWindowVirtualizer } from '@tanstack/react-virtual'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { useMediaMatch, useWindowSize } from 'rooks'
+import { defaultRangeExtractor, Range, useVirtualizer } from '@tanstack/react-virtual'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useWindowSize } from 'rooks'
 
 type Props = {
 	media: Media
-	// TODO: progress loaded from before reading session, will scroll to offset of page
-	// initialPage: number
+	initialPage?: number
+	orientation?: 'horizontal' | 'vertical'
 	getPageUrl(page: number): string
+	onProgressUpdate(page: number): void
 }
 
-export default function ImageBasedScrollReader({ media, getPageUrl }: Props) {
+// TODO: support both horizontal and vertical scrolling
+export default function ImageBasedScrollReader({
+	initialPage,
+	media,
+	// orientation = 'vertical',
+	getPageUrl,
+	onProgressUpdate,
+}: Props) {
 	const parentRef = useRef<HTMLDivElement>(null)
 	const [imageSizes, setImageSizes] = useState<Record<number, number>>({})
-
-	const isAtLeastSmall = useMediaMatch('(min-width: 640px)')
 
 	const { innerWidth, innerHeight } = useWindowSize()
 
@@ -26,24 +32,49 @@ export default function ImageBasedScrollReader({ media, getPageUrl }: Props) {
 		[imageSizes, innerHeight],
 	)
 
-	const rowVirtualizer = useVirtualizer({
+	const visibleRef = useRef([0, 0])
+	const virtualizer = useVirtualizer({
 		count: media.pages,
 		estimateSize,
 		getScrollElement: () => parentRef.current,
 		overscan: 5,
+		rangeExtractor: useCallback((range: Range) => {
+			visibleRef.current = [range.startIndex, range.endIndex]
+			return defaultRangeExtractor(range)
+		}, []),
 	})
 
 	useEffect(
 		() => {
-			rowVirtualizer.measure()
+			if (initialPage) {
+				virtualizer.scrollToIndex(initialPage - 1)
+			}
 		},
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-		[innerWidth, innerHeight, isAtLeastSmall],
+		[initialPage],
 	)
 
-	// return <RowVirtualizerDynamicWindow count={media.pages} getPageUrl={getPageUrl} />
+	useEffect(
+		() => {
+			virtualizer.measure()
+		},
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[innerWidth, innerHeight, imageSizes],
+	)
 
-	// // TODO: scrollbar width
+	//* I take the lower bound as the current page so we don't eagarly update the progress
+	//* right when the edge of the next page is visible. It isn't perfect, but it's better.
+	const currentPage = visibleRef.current[0] ?? 0
+	useEffect(
+		() => {
+			//! FIXME: important!: debounce this API call...
+			onProgressUpdate(currentPage + 1)
+		},
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[currentPage],
+	)
+
+	// FIXME: does not handle resize well....
 	return (
 		<div
 			ref={parentRef}
@@ -55,32 +86,37 @@ export default function ImageBasedScrollReader({ media, getPageUrl }: Props) {
 			<div
 				className="relative inline-flex h-full w-full text-white"
 				style={{
-					height: `${rowVirtualizer.getTotalSize()}px`,
+					height: `${virtualizer.getTotalSize()}px`,
 				}}
 			>
-				{rowVirtualizer.getVirtualItems().map((virtualRow) => {
+				<div className="fixed bottom-2 left-2 z-50 rounded-lg bg-black bg-opacity-75 px-2 py-1 text-white">
+					{(visibleRef.current[0] ?? 0) + 1}
+				</div>
+				{virtualizer.getVirtualItems().map((virtualRow) => {
 					const virtualPage = virtualRow.index + 1
 					const imageUrl = getPageUrl(virtualPage)
 
 					return (
 						<div
 							key={virtualRow.key}
+							data-index={virtualRow.index}
 							style={{
+								// height: `${estimateSize(virtualRow.index)}px`,
 								position: 'absolute',
 								transform: `translateY(${virtualRow.start}px)`,
 								width: '100%',
 							}}
 							className="flex items-start justify-center"
+							// ref={virtualizer.measureElement}
 						>
 							<img
 								className="max-h-full w-full select-none object-scale-down md:w-auto"
 								src={imageUrl}
 								style={{
-									maxHeight: innerHeight,
+									maxHeight: innerHeight || undefined,
 								}}
-								ref={rowVirtualizer.measureElement}
 								onLoad={(e) => {
-									const height = e.currentTarget.naturalHeight
+									const height = e.currentTarget.height
 									setImageSizes((prev) => ({
 										...prev,
 										[virtualRow.index]: height,
@@ -90,109 +126,6 @@ export default function ImageBasedScrollReader({ media, getPageUrl }: Props) {
 						</div>
 					)
 				})}
-			</div>
-		</div>
-	)
-}
-
-const RowVirtualizerDynamicWindow = ({
-	count,
-	getPageUrl,
-}: {
-	count: number
-	getPageUrl(page: number): string
-}) => {
-	const parentRef = useRef<HTMLDivElement>(null)
-	const [imageSizes, setImageSizes] = useState<Record<number, number>>({})
-
-	const parentOffsetRef = useRef(0)
-
-	const isAtLeastSmall = useMediaMatch('(min-width: 640px)')
-
-	const { innerWidth, innerHeight } = useWindowSize()
-
-	// const estimateSize = useCallback(() => {
-	// 	if (!isAtLeastSmall) {
-	// 		return innerWidth || 0
-	// 	} else {
-	// 		return innerHeight || 0
-	// 	}
-	// }, [innerHeight, innerWidth, isAtLeastSmall])
-
-	const estimateSize = useCallback(
-		(index: number) => {
-			const loadedSize = imageSizes[index]
-			return loadedSize ?? (innerHeight || 35)
-		},
-		[imageSizes, innerHeight],
-	)
-
-	useLayoutEffect(() => {
-		parentOffsetRef.current = parentRef.current?.offsetTop ?? 0
-	}, [])
-
-	const virtualizer = useWindowVirtualizer({
-		count,
-		// estimateSize: () => 100,
-		estimateSize,
-		overscan: 0,
-		scrollMargin: parentOffsetRef.current,
-	})
-	const items = virtualizer.getVirtualItems()
-
-	useEffect(() => {
-		virtualizer.measure()
-	}, [virtualizer])
-
-	console.log('items', items)
-	console.log('count', count)
-
-	return (
-		<div ref={parentRef} className="max-w-full">
-			<div
-				style={{
-					height: virtualizer.getTotalSize(),
-					position: 'relative',
-					width: '100%',
-				}}
-			>
-				<div
-					style={{
-						left: 0,
-						position: 'absolute',
-						top: 0,
-						transform: `translateY(${items[0]!.start - virtualizer.options.scrollMargin}px)`,
-						width: '100%',
-					}}
-				>
-					{items.map((virtualRow) => {
-						const virtualPage = virtualRow.index + 1
-						const imageUrl = getPageUrl(virtualPage)
-						return (
-							<div
-								key={virtualRow.key}
-								data-index={virtualRow.index}
-								className="flex justify-center"
-							>
-								<img
-									className="max-h-full w-full select-none object-scale-down md:w-auto"
-									style={{
-										maxHeight: innerHeight,
-									}}
-									src={imageUrl}
-									ref={virtualizer.measureElement}
-									onLoad={(e) => {
-										const height = e.currentTarget.naturalHeight
-										setImageSizes((prev) => ({
-											...prev,
-											[virtualRow.index]: height,
-										}))
-									}}
-								/>
-							</div>
-						)
-					})}
-				</div>
 			</div>
 		</div>
 	)
