@@ -370,7 +370,7 @@ importers:
       '@tanstack/react-query': ^4.28.0
       '@tanstack/react-query-devtools': ^4.28.0
       '@tanstack/react-table': ^8.8.4
-      '@tanstack/react-virtual': 3.0.0-beta.18
+      '@tanstack/react-virtual': 3.0.0-beta.54
       '@types/node': ^18.15.11
       '@types/nprogress': ^0.2.0
       '@types/pluralize': ^0.0.29
@@ -416,7 +416,7 @@ importers:
       '@tanstack/react-query': 4.29.1_biqbaboplfbrettd7655fr4n2y
       '@tanstack/react-query-devtools': 4.29.1_veiur3vxaibs2bgteler4tkrom
       '@tanstack/react-table': 8.8.5_biqbaboplfbrettd7655fr4n2y
-      '@tanstack/react-virtual': 3.0.0-beta.18_react@18.2.0
+      '@tanstack/react-virtual': 3.0.0-beta.54_react@18.2.0
       class-variance-authority: 0.4.0_typescript@5.0.4
       clsx: 1.2.1
       dayjs: 1.11.7
@@ -5536,13 +5536,12 @@ packages:
       react-dom: 18.2.0_react@18.2.0
     dev: false
 
-  /@tanstack/react-virtual/3.0.0-beta.18_react@18.2.0:
-    resolution: {integrity: sha512-mnyCZT6htcRNw1jVb+WyfMUMbd1UmXX/JWPuMf6Bmj92DB/V7Ogk5n5rby5Y5aste7c7mlsBeMF8HtpwERRvEQ==}
-    engines: {node: '>=12'}
+  /@tanstack/react-virtual/3.0.0-beta.54_react@18.2.0:
+    resolution: {integrity: sha512-D1mDMf4UPbrtHRZZriCly5bXTBMhylslm4dhcHqTtDJ6brQcgGmk8YD9JdWBGWfGSWPKoh2x1H3e7eh+hgPXtQ==}
     peerDependencies:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0
     dependencies:
-      '@tanstack/virtual-core': 3.0.0-beta.18
+      '@tanstack/virtual-core': 3.0.0-beta.54
       react: 18.2.0
     dev: false
 
@@ -5551,9 +5550,8 @@ packages:
     engines: {node: '>=12'}
     dev: false
 
-  /@tanstack/virtual-core/3.0.0-beta.18:
-    resolution: {integrity: sha512-tcXutY05NpN9lp3+AXI9Sn85RxSPV0EJC0XMim9oeQj/E7bjXoL0qZ4Er4wwnvIbv/hZjC91EmbIQGjgdr6nZg==}
-    engines: {node: '>=12'}
+  /@tanstack/virtual-core/3.0.0-beta.54:
+    resolution: {integrity: sha512-jtkwqdP2rY2iCCDVAFuaNBH3fiEi29aTn2RhtIoky8DTTiCdc48plpHHreLwmv1PICJ4AJUUESaq3xa8fZH8+g==}
     dev: false
 
   /@tauri-apps/api/1.2.0:

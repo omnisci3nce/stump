@@ -45,18 +45,20 @@ export default function BookReaderScene() {
 	}
 
 	if (media.extension.match(ARCHIVE_EXTENSION)) {
-		const animated = !!search.get('animated')
+		// const animated = !!search.get('animated')
 
 		// TODO: this will be merged under ImageBasedReader once animations get stable. animation will become a prop
 		// eventually. This is just a debug tool for me right now, and will not remain as separate components in the future.
+
+		// TODO: don't do this. I think we are approaching an ugly workaround here with all this conditional logic...
 		const Component = ImageBasedScrollReader
 
 		return (
 			<Component
 				media={media}
-				currentPage={parseInt(page, 10)}
+				// currentPage={parseInt(page, 10)}
 				getPageUrl={(pageNumber) => getMediaPage(id, pageNumber)}
-				onPageChange={handleChangePage}
+				// onPageChange={handleChangePage}
 			/>
 		)
 	}

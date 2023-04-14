@@ -32,7 +32,6 @@ export default function HorizontalCardList({ cards, title, fetchNext }: Props) {
 
 	const columnVirtualizer = useVirtualizer({
 		count: cards.length,
-		enableSmoothScroll: true,
 		estimateSize,
 		getScrollElement: () => parentRef.current,
 		horizontal: true,
