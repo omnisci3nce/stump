@@ -52,6 +52,11 @@ type EpubLocationState = {
 	end: EpubLocation
 }
 
+/**Keys that will trigger a forwards pagination  */
+const PAGE_FORWARDS_KEYS = ['ArrowRight', 'PageDown']
+/**Keys that will trigger a backwards pagination  */
+const PAGE_BACKWARDS_KEYS = ['ArrowLeft', 'PageUp']
+
 /**
  * A component for rendering a reader capable of reading epub files. This component uses
  * epubjs internally for the main rendering logic.
@@ -376,6 +381,26 @@ export default function EpubJsReader({ id, initialCfi }: EpubJsReaderProps) {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 		[currentLocation, spineSize],
 	)
+
+	// handle what happens on key press
+	const handleKeyPress = useCallback(
+		(event: any) => {
+			if (PAGE_FORWARDS_KEYS.some((key) => event.key === key)) {
+				onPaginateForward()
+			} else if (PAGE_BACKWARDS_KEYS.some((key) => event.key === key)) {
+				onPaginateBackward()
+			}
+		},
+		[rendition],
+	)
+
+	useEffect(() => {
+		document.addEventListener('keydown', handleKeyPress)
+
+		return () => {
+			document.removeEventListener('keydown', handleKeyPress) // cleanup the listener when the component is unmounted
+		}
+	}, [handleKeyPress, rendition])
 
 	if (isLoading || !epub) {
 		return null
